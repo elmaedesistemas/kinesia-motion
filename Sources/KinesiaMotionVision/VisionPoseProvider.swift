@@ -132,6 +132,7 @@ extension VisionPoseProvider: AVCaptureVideoDataOutputSampleBufferDelegate {
         try? handler.perform([request])
 
         var points: [Joint: CGPoint] = [:]
+        var confidence: [Joint: Double] = [:]
         if let observation = request.results?.first,
            let recognized = try? observation.recognizedPoints(.all) {
             for (name, point) in recognized where point.confidence > minimumConfidence {
@@ -141,11 +142,12 @@ extension VisionPoseProvider: AVCaptureVideoDataOutputSampleBufferDelegate {
                     x: point.location.x * imageSize.width,
                     y: (1 - point.location.y) * imageSize.height
                 )
+                confidence[joint] = Double(point.confidence)
             }
         }
 
         // An empty pose still matters: it tells the session the person left the frame.
-        yield(Pose(points: points, timestamp: timestamp, imageSize: imageSize))
+        yield(Pose(points: points, timestamp: timestamp, imageSize: imageSize, confidence: confidence))
     }
 }
 #endif

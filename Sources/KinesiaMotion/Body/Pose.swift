@@ -14,19 +14,33 @@ import Foundation
 /// - Coordinates are in image pixels, with y growing **downward**.
 /// - Sides are **anatomical**: the patient's real left and right, already un-mirrored.
 /// - Only confident points are included (low-confidence joints are left out).
+/// - `confidence` is optional: a source that doesn't know leaves it empty.
 public struct Pose: Sendable {
     public var points: [Joint: CGPoint]
     public var timestamp: TimeInterval
     /// Size of the image the points were measured in. Lets a UI draw them over the camera.
     public var imageSize: CGSize?
+    /// How sure the detector is of each point, 0...1.
+    public var confidence: [Joint: Double]
 
-    public init(points: [Joint: CGPoint], timestamp: TimeInterval, imageSize: CGSize? = nil) {
+    public init(
+        points: [Joint: CGPoint],
+        timestamp: TimeInterval,
+        imageSize: CGSize? = nil,
+        confidence: [Joint: Double] = [:]
+    ) {
         self.points = points
         self.timestamp = timestamp
         self.imageSize = imageSize
+        self.confidence = confidence
     }
 
     public subscript(joint: Joint) -> CGPoint? {
         points[joint]
+    }
+
+    /// The weakest confidence among `joints` that are in view. nil when the source gives none.
+    public func confidence(of joints: [Joint]) -> Double? {
+        joints.compactMap { points[$0] == nil ? nil : confidence[$0] }.min()
     }
 }
