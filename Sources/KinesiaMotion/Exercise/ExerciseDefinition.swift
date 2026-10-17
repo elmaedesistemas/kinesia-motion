@@ -20,6 +20,10 @@ public struct ExerciseDefinition: Identifiable, Sendable, Hashable, Codable {
         /// Move away from rest and come back. A rep counts when the movement
         /// passes `high` and then returns below `low` (hysteresis kills jitter).
         case reps(low: Double, high: Double)
+        /// Reach the end of the range and stay there. A hold counts once the value
+        /// stays above `threshold` and steady for `seconds`; its value is the median
+        /// of that window. The patient goes back below `threshold` before the next one.
+        case hold(threshold: Double, seconds: Double)
     }
 
     /// Stable id, e.g. "elbow.flexion". Saved in sessions, never rename.

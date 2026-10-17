@@ -12,6 +12,8 @@ public enum FormFeedback: String, Sendable, CaseIterable, Codable {
     case keepElbowStraight
     case keepTrunkUpright
     case keepShouldersLevel
+    case keepKneeStraight
+    case keepHipsLevel
 }
 
 /// A condition that must hold while a rep is in progress.

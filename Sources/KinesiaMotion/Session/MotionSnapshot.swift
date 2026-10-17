@@ -30,6 +30,8 @@ public struct MotionSnapshot: Sendable, Equatable {
     public var repCount = 0
     public var rejectedCount = 0
     public var lastRep: Rep?
+    /// Hold exercises: 0...1 while holding, nil otherwise.
+    public var holdProgress: Double?
     public var isVisible = false
     public var missingJoints: [Joint] = []
     public var isRunning = false

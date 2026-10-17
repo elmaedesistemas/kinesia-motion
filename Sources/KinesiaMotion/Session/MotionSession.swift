@@ -82,6 +82,7 @@ public final class MotionSession {
         snapshot.best = engine.best
         snapshot.repCount = engine.count
         snapshot.rejectedCount = engine.rejected.count
+        snapshot.holdProgress = engine.holdProgress
         events += updateBaseline()
 
         for event in events {
@@ -117,7 +118,8 @@ public final class MotionSession {
     
     // MARK: - First measurement
 
-    /// Starts a first measurement: counts from zero and finishes after `reps` clean reps.
+    /// Starts a first measurement: counts from zero and finishes after `reps` clean reps
+    /// (clean holds, for hold exercises).
     /// Rejected reps don't count, so the starting point is measured with good form.
     public func startBaseline(reps: Int = 3) {
         reset()

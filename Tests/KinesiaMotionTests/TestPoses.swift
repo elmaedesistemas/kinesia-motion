@@ -37,3 +37,21 @@ func oneRep(peak: Double, upperArm: Double = 0, startingAt start: TimeInterval =
         elbowPose(flexion: angle, upperArm: upperArm, time: start + Double(index) / 24)
     }
 }
+
+/// A person standing still with arms by their sides, as 2D pixels (y down).
+/// Each side's shoulder, hip, knee and ankle are stacked vertically, so the same pose
+/// works for side and front views: every measure in the library reads ~0 here.
+func standingPose(time: TimeInterval = 0) -> Pose {
+    var points: [Joint: CGPoint] = [.nose: CGPoint(x: 0, y: -40), .neck: CGPoint(x: 0, y: 0), .root: CGPoint(x: 0, y: 300)]
+    for side in BodySide.allCases {
+        let x: CGFloat = side == .left ? 60 : -60
+        points[.ear(side)] = CGPoint(x: x / 3, y: -50)
+        points[.shoulder(side)] = CGPoint(x: x, y: 0)
+        points[.elbow(side)] = CGPoint(x: x, y: 150)
+        points[.wrist(side)] = CGPoint(x: x, y: 280)
+        points[.hip(side)] = CGPoint(x: x * 0.7, y: 300)
+        points[.knee(side)] = CGPoint(x: x * 0.7, y: 500)
+        points[.ankle(side)] = CGPoint(x: x * 0.7, y: 700)
+    }
+    return Pose(points: points, timestamp: time)
+}
