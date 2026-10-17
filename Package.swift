@@ -5,16 +5,16 @@
 import PackageDescription
 
 let package = Package(
-    name: "KinetiaMotion",
+    name: "KinesiaMotion",
     platforms: [.iOS(.v17), .macOS(.v14)],
     products: [
-        .library(name: "KinetiaMotion", targets: ["KinetiaMotion"]),
-        .library(name: "KinetiaMotionVision", targets: ["KinetiaMotionVision"])
+        .library(name: "KinesiaMotion", targets: ["KinesiaMotion"]),
+        .library(name: "KinesiaMotionVision", targets: ["KinesiaMotionVision"])
     ],
     targets: [
-        .target(name: "KinetiaMotion"),
-        .target(name: "KinetiaMotionVision", dependencies: ["KinetiaMotion"]),
-        .testTarget(name: "KinetiaMotionTests", dependencies: ["KinetiaMotion"]),
-        .testTarget(name: "KinetiaMotionVisionTests", dependencies: ["KinetiaMotionVision"])
+        .target(name: "KinesiaMotion"),
+        .target(name: "KinesiaMotionVision", dependencies: ["KinesiaMotion"]),
+        .testTarget(name: "KinesiaMotionTests", dependencies: ["KinesiaMotion"]),
+        .testTarget(name: "KinesiaMotionVisionTests", dependencies: ["KinesiaMotionVision"])
     ]
 )
