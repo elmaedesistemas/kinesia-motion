@@ -11,11 +11,46 @@ import Foundation
 public struct Rep: Sendable, Equatable {
     /// Highest value of the rep. For a hold: the median of the held window.
     public let peak: Double
+    /// Whole rep, rest to rest. For a hold: the time it was held.
     public let duration: TimeInterval
     /// Rules broken for a meaningful part of the rep. Empty = clean rep.
     public let faults: Set<FormFeedback>
+    /// From leaving rest to the peak (to the start of the hold, for holds).
+    public let riseDuration: TimeInterval
+    /// Fastest movement during the rep, in degrees per second.
+    public let peakVelocity: Double
+    /// Average detector confidence of the measured joints, 0...1. nil when the source gives none.
+    public let confidence: Double?
 
     public var isClean: Bool { faults.isEmpty }
+    /// From the peak back to rest. 0 for holds.
+    public var returnDuration: TimeInterval { max(0, duration - riseDuration) }
+
+    init(
+        peak: Double,
+        duration: TimeInterval,
+        faults: Set<FormFeedback> = [],
+        riseDuration: TimeInterval = 0,
+        peakVelocity: Double = 0,
+        confidence: Double? = nil
+    ) {
+        self.peak = peak
+        self.duration = duration
+        self.faults = faults
+        self.riseDuration = riseDuration
+        self.peakVelocity = peakVelocity
+        self.confidence = confidence
+    }
+}
+
+extension Array where Element == Rep {
+    /// How much the peaks vary (standard deviation, degrees). Low = consistent reps.
+    public var peakSpread: Double? {
+        guard count > 1 else { return nil }
+        let peaks = map(\.peak)
+        let mean = peaks.reduce(0, +) / Double(count)
+        return (peaks.map { ($0 - mean) * ($0 - mean) }.reduce(0, +) / Double(count - 1)).squareRoot()
+    }
 }
 
 /// What happened on this frame. The app reacts (voice, haptics, UI).
@@ -30,6 +65,8 @@ public enum MotionEvent: Sendable, Equatable {
     case visibilityChanged(Visibility)
     /// The first measurement finished: median of the clean reps' peaks.
     case baselineCompleted(Double)
+    /// The placement problems changed (debounced). Empty = the setup is fine now.
+    case setupChanged(Set<SetupIssue>)
 }
 
 /// Turns a stream of poses into reps (or holds), checking form along the way.
@@ -53,6 +90,8 @@ public struct RepEngine: Sendable {
     public private(set) var rejected: [Rep] = []
     /// Hold exercises: 0...1 while holding, nil otherwise. Drives a progress ring.
     public private(set) var holdProgress: Double?
+    /// Weakest detector confidence among the measured joints on the last frame. nil = unknown.
+    public private(set) var confidence: Double?
 
     private var inRep = false
     private var repStart: TimeInterval = 0
@@ -65,6 +104,12 @@ public struct RepEngine: Sendable {
     private var holdAnchor: Double = 0
     private var holdValues: [Double] = []
     private var holdDone = false
+    private var peakTime: TimeInterval = 0
+    private var maxVelocity: Double = 0
+    private var velocity: Double = 0
+    private var previous: (value: Double, time: TimeInterval)?
+    private var confidenceSum: Double = 0
+    private var confidenceFrames = 0
 
     public init(definition: ExerciseDefinition, side: BodySide) {
         self.definition = definition
@@ -80,6 +125,14 @@ public struct RepEngine: Sendable {
         let smoothed = value.map { $0 + smoothing * (raw - $0) } ?? raw
         value = smoothed
         best = max(best, smoothed)
+        confidence = pose.confidence(of: definition.primary.joints(for: side))
+
+        if let previous, pose.timestamp > previous.time {
+            velocity = abs(smoothed - previous.value) / (pose.timestamp - previous.time)
+        } else {
+            velocity = 0
+        }
+        previous = (smoothed, pose.timestamp)
 
         switch definition.kind {
         case let .reps(low, high):
@@ -100,7 +153,7 @@ public struct RepEngine: Sendable {
         guard inRep else { return events }
 
         frames += 1
-        repPeak = max(repPeak, smoothed)
+        track(smoothed, at: pose.timestamp)
         events += checkForm(in: pose)
 
         // Back to rest: judge the rep.
@@ -108,7 +161,14 @@ public struct RepEngine: Sendable {
             inRep = false
             // Small movements that never reached `high` are just ignored.
             guard repPeak >= high else { return events }
-            events.append(judge(Rep(peak: repPeak, duration: pose.timestamp - repStart, faults: currentFaults)))
+            events.append(judge(Rep(
+                peak: repPeak,
+                duration: pose.timestamp - repStart,
+                faults: currentFaults,
+                riseDuration: peakTime - repStart,
+                peakVelocity: maxVelocity,
+                confidence: averageConfidence
+            )))
         }
 
         return events
@@ -129,6 +189,9 @@ public struct RepEngine: Sendable {
 
         if !inRep {
             startAttempt(at: pose.timestamp, value: smoothed)
+        }
+        if !holdDone {
+            track(smoothed, at: pose.timestamp)
         }
 
         // One hold per trip: after it's judged, wait for rest before the next one.
@@ -154,7 +217,14 @@ public struct RepEngine: Sendable {
         if held >= seconds, let median = holdValues.median {
             holdDone = true
             holdProgress = nil
-            events.append(judge(Rep(peak: median, duration: held, faults: currentFaults)))
+            events.append(judge(Rep(
+                peak: median,
+                duration: held,
+                faults: currentFaults,
+                riseDuration: (holdStart ?? repStart) - repStart,
+                peakVelocity: maxVelocity,
+                confidence: averageConfidence
+            )))
         }
 
         return events
@@ -171,6 +241,27 @@ public struct RepEngine: Sendable {
         holdStart = nil
         holdValues = []
         holdDone = false
+        peakTime = time
+        maxVelocity = 0
+        confidenceSum = 0
+        confidenceFrames = 0
+    }
+
+    /// Per-frame bookkeeping for the rep's metrics.
+    private mutating func track(_ value: Double, at time: TimeInterval) {
+        if value > repPeak {
+            repPeak = value
+            peakTime = time
+        }
+        maxVelocity = max(maxVelocity, velocity)
+        if let confidence {
+            confidenceSum += confidence
+            confidenceFrames += 1
+        }
+    }
+
+    private var averageConfidence: Double? {
+        confidenceFrames > 0 ? confidenceSum / Double(confidenceFrames) : nil
     }
 
     /// Rules broken for more than `faultTolerance` of the frames.
@@ -202,6 +293,9 @@ public struct RepEngine: Sendable {
         holdValues = []
         holdDone = false
         holdProgress = nil
+        confidence = nil
+        previous = nil
+        velocity = 0
     }
 
     private mutating func checkForm(in pose: Pose) -> [MotionEvent] {

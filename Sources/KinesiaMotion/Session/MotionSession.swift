@@ -26,13 +26,21 @@ public final class MotionSession {
     
     /// Peaks of the clean reps so far. Read it when saving a session.
     public var peaks: [Double] { engine.peaks }
+    /// The clean reps so far, with their timing and confidence.
+    public var reps: [Rep] { engine.reps }
 
     /// Frames in a row before visibility flips (~0.25 s at 24 FPS).
     @ObservationIgnored public var framesToConfirmVisibility = 6
+    /// Thresholds for the placement check.
+    @ObservationIgnored public var setupCheck = SetupCheck()
+    /// Frames in a row before the placement issues change (~0.5 s at 24 FPS).
+    @ObservationIgnored public var framesToConfirmSetup = 12
 
     @ObservationIgnored private var engine: RepEngine
     @ObservationIgnored private let smoothing: Double
     @ObservationIgnored private var visibilityStreak = 0
+    @ObservationIgnored private var pendingSetup: Set<SetupIssue> = []
+    @ObservationIgnored private var setupStreak = 0
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var listeners: [UUID: AsyncStream<MotionEvent>.Continuation] = [:]
 
@@ -76,6 +84,7 @@ public final class MotionSession {
     @discardableResult
     public func process(_ pose: Pose) -> [MotionEvent] {
         var events = updateVisibility(with: pose)
+        events += updateSetup(with: pose)
         events += engine.process(pose)
 
         snapshot.value = engine.value
@@ -83,6 +92,7 @@ public final class MotionSession {
         snapshot.repCount = engine.count
         snapshot.rejectedCount = engine.rejected.count
         snapshot.holdProgress = engine.holdProgress
+        snapshot.confidence = engine.confidence
         events += updateBaseline()
 
         for event in events {
@@ -110,6 +120,8 @@ public final class MotionSession {
     public func reset() {
         engine = Self.makeEngine(exercise, side, smoothing)
         visibilityStreak = 0
+        pendingSetup = []
+        setupStreak = 0
         let running = snapshot.isRunning
         snapshot = MotionSnapshot()
         snapshot.isRunning = running
@@ -201,6 +213,29 @@ public final class MotionSession {
         snapshot.isVisible = seesAll
         snapshot.missingJoints = missing
         return [.visibilityChanged(Visibility(isVisible: seesAll, missingJoints: missing))]
+    }
+
+    // MARK: - Placement
+
+    private func updateSetup(with pose: Pose) -> [MotionEvent] {
+        let issues = setupCheck.issues(in: pose, exercise: exercise, side: side)
+
+        guard issues != snapshot.setupIssues else {
+            setupStreak = 0
+            return []
+        }
+
+        if issues == pendingSetup {
+            setupStreak += 1
+        } else {
+            pendingSetup = issues
+            setupStreak = 1
+        }
+        guard setupStreak >= framesToConfirmSetup else { return [] }
+
+        setupStreak = 0
+        snapshot.setupIssues = issues
+        return [.setupChanged(issues)]
     }
 
     // MARK: - Helpers

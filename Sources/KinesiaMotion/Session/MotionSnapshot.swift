@@ -32,6 +32,10 @@ public struct MotionSnapshot: Sendable, Equatable {
     public var lastRep: Rep?
     /// Hold exercises: 0...1 while holding, nil otherwise.
     public var holdProgress: Double?
+    /// Weakest detector confidence among the measured joints, 0...1. nil = unknown.
+    public var confidence: Double?
+    /// Placement problems to fix before measuring. Empty = fine.
+    public var setupIssues: Set<SetupIssue> = []
     public var isVisible = false
     public var missingJoints: [Joint] = []
     public var isRunning = false

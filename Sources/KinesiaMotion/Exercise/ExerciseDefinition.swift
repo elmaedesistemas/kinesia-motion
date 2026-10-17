@@ -53,4 +53,12 @@ public struct ExerciseDefinition: Identifiable, Sendable, Hashable, Codable {
         self.rules = rules
         self.defaultTarget = defaultTarget
     }
+
+    /// Every joint the exercise reads: the primary measure first, then the form rules'.
+    public func joints(for side: BodySide) -> [Joint] {
+        var seen: Set<Joint> = []
+        return ([primary] + rules.map(\.measure))
+            .flatMap { $0.joints(for: side) }
+            .filter { seen.insert($0).inserted }
+    }
 }
