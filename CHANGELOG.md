@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0 · 2026-10-24
+
+- `VideoPoseProvider` (KinesiaMotionVision): poses from a video file with the same Vision body pose
+  as the live camera, on iOS and macOS. `readAll()` returns every pose at once.
+- `VisionPoseProvider` and `VideoPoseProvider` share the Vision → `Pose` conversion.
+
 ## 0.1.0 · 2026-10-24
 
 First stable release, used by the Kinesia patient app.

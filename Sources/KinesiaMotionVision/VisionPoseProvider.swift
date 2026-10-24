@@ -131,23 +131,11 @@ extension VisionPoseProvider: AVCaptureVideoDataOutputSampleBufferDelegate {
         let handler = VNImageRequestHandler(cmSampleBuffer: sampleBuffer, orientation: orientation)
         try? handler.perform([request])
 
-        var points: [Joint: CGPoint] = [:]
-        var confidence: [Joint: Double] = [:]
-        if let observation = request.results?.first,
-           let recognized = try? observation.recognizedPoints(.all) {
-            for (name, point) in recognized where point.confidence > minimumConfidence {
-                guard let joint = Joint(visionName: name, mirrored: isMirrored) else { continue }
-                // Vision: normalized, origin bottom-left. Pose: pixels, y grows downward.
-                points[joint] = CGPoint(
-                    x: point.location.x * imageSize.width,
-                    y: (1 - point.location.y) * imageSize.height
-                )
-                confidence[joint] = Double(point.confidence)
-            }
-        }
-
-        // An empty pose still matters: it tells the session the person left the frame.
-        yield(Pose(points: points, timestamp: timestamp, imageSize: imageSize, confidence: confidence))
+        yield(Pose(observation: request.results?.first,
+                   imageSize: imageSize,
+                   timestamp: timestamp,
+                   mirrored: isMirrored,
+                   minimumConfidence: minimumConfidence))
     }
 }
 #endif
